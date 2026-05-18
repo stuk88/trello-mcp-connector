@@ -1,0 +1,32 @@
+{
+  "name": "trello-mcp-connector",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server exposing Trello (boards, lists, cards, webhooks) via OAuth 1.0a.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "trello-mcp-server": "dist/index.js",
+    "trello-webhook-server": "dist/webhooks/receiver.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "webhook-server": "tsx src/webhooks/receiver.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

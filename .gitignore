@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+.fastembed_cache/
+.trello-connector/
+
+# Per-board status→list cache. Re-derivable from list_lists; commit only if
+# your team wants a frozen shared mapping.
+.trello-list-mapping.json
+.vscode/
+.idea/
+.claude/settings.local.json
