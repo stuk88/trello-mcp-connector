@@ -20,38 +20,40 @@ can revoke access at any time from the Trello account settings.
 ## Requirements
 
 - Node.js ≥ 20 (uses the built-in `fetch`).
-- A Trello "API Key" + "OAuth Secret" pair, obtained at
-  [https://trello.com/app-key](https://trello.com/app-key). These identify the
-  application; per-user tokens are obtained at runtime via OAuth.
+- (Optional) a Trello "API Key" + "OAuth Secret" pair from
+  [https://trello.com/app-key](https://trello.com/app-key). A shared app pair is
+  bundled in [`src/config.ts`](src/config.ts); set `TRELLO_CONSUMER_KEY` /
+  `TRELLO_CONSUMER_SECRET` only to point the connector at a different app. These
+  identify the application; per-user tokens are obtained at runtime via OAuth.
 
 ## Setup
 
 ```sh
 npm install
-cp .env.example .env
-# Fill in TRELLO_CONSUMER_KEY and TRELLO_CONSUMER_SECRET in .env
 npm run build
 ```
 
-### Allowed Origins (required)
+### Allowed Origins (only if you bring your own app key)
 
-Trello no longer accepts the `*` wildcard in the "Allowed Origins" section of
-the app-key page — it returns `Invalid return_url` when the OAuth flow
-redirects back. You must add the exact origin of the local OAuth callback:
+The bundled app already has the local OAuth callback origin
+(`http://127.0.0.1:51823`) registered, so the default setup needs nothing here.
+If you override `TRELLO_CONSUMER_KEY` / `TRELLO_CONSUMER_SECRET` with your own
+app, register the callback origin on that app — Trello no longer accepts the
+`*` wildcard and returns `Invalid return_url` otherwise:
 
 1. Open [https://trello.com/app-key](https://trello.com/app-key).
 2. Under **Allowed Origins**, add `http://127.0.0.1:51823` and submit.
 3. Remove the `*` entry if present.
 
-If you change `TRELLO_OAUTH_CALLBACK_PORT` from its default of `51823`, add the
-corresponding origin instead.
+If you also change `TRELLO_OAUTH_CALLBACK_PORT` from its default of `51823`, add
+the corresponding origin instead.
 
 ## Running the MCP server
 
 The server speaks JSON-RPC on stdio, which is what every MCP client expects.
 
 ```sh
-TRELLO_CONSUMER_KEY=... TRELLO_CONSUMER_SECRET=... node dist/index.js
+node dist/index.js
 ```
 
 ### Wiring it into Claude Code
@@ -64,11 +66,7 @@ equivalent):
   "mcpServers": {
     "trello": {
       "command": "node",
-      "args": ["/absolute/path/to/trello-connector-claude-code/dist/index.js"],
-      "env": {
-        "TRELLO_CONSUMER_KEY": "...",
-        "TRELLO_CONSUMER_SECRET": "..."
-      }
+      "args": ["/absolute/path/to/trello-connector-claude-code/dist/index.js"]
     }
   }
 }

@@ -17,19 +17,21 @@ export interface Config {
   oauthCallbackPort: number;
 }
 
-export class ConfigError extends Error {}
-
-function readEnv(env: NodeJS.ProcessEnv, name: string): string {
-  const v = env[name];
-  if (v && v.length > 0) return v;
-  throw new ConfigError(`Missing required environment variable: ${name}`);
-}
+/**
+ * Shared Trello app identity, bundled so the connector runs with zero env
+ * setup. These authenticate the *application*, not any user's data — board
+ * access comes from the per-user OAuth token minted by `auth_login`. Set the
+ * matching env var to point the connector at a different Trello app.
+ */
+const BUNDLED_CONSUMER_KEY = "11edbb2c0b5be7cb5e12d4501d58c30f";
+const BUNDLED_CONSUMER_SECRET =
+  "8bf842d4e7a865f6d557937b1c5b1e9857a941701626477bd1173cf990a8e2c0";
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const home = env.TRELLO_CONNECTOR_HOME ?? join(homedir(), ".trello-connector");
   return {
-    consumerKey: readEnv(env, "TRELLO_CONSUMER_KEY"),
-    consumerSecret: readEnv(env, "TRELLO_CONSUMER_SECRET"),
+    consumerKey: env.TRELLO_CONSUMER_KEY || BUNDLED_CONSUMER_KEY,
+    consumerSecret: env.TRELLO_CONSUMER_SECRET || BUNDLED_CONSUMER_SECRET,
     appName: env.TRELLO_APP_NAME ?? "Trello MCP Connector",
     connectorHome: home,
     tokenStorePath: join(home, "tokens.json"),
@@ -39,9 +41,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /**
- * Lightweight, lazy variant used by the MCP server: defers env validation until
- * a tool that actually needs Trello credentials runs. This lets `auth_status`
- * report "not configured" without crashing process startup.
+ * Thin wrapper around loadConfig for the MCP server and webhook receiver. With
+ * the app credentials bundled, config always loads; the {config, error} shape
+ * is retained so the server's optional-config plumbing keeps its seam.
  */
 export function tryLoadConfig(env: NodeJS.ProcessEnv = process.env): {
   config: Config | null;
