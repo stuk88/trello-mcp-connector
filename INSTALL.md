@@ -109,6 +109,27 @@ Ask Claude:
 
 If a board is missing, your Trello account isn't a member of it.
 
+## Updating an existing install
+
+Already set up from a previous version? Pull the latest code and rebuild.
+There's **nothing to re-register and no need to re-authorize** — the registered
+path (`dist/index.js`) and your saved token (`~/.trello-connector/tokens.json`)
+don't change.
+
+```sh
+cd /path/to/trello-mcp-connector   # the directory you cloned in step 1
+git pull
+npm install        # only does anything if dependencies changed
+npm run build      # recompile dist/ — required, since dist/ is gitignored
+```
+
+Then **restart Claude Code** so it relaunches the MCP server from the freshly
+built `dist/`. A running session keeps using the old build until you restart.
+
+Confirm the update with `/mcp` (or `claude mcp list`), then try a newer tool —
+e.g. ask Claude to *"list the attachments on card X"*, *"add a checklist item"*,
+or *"comment on card Y"*.
+
 ## Optional: a default board for a project
 
 Drop a `trello.config.json` at a project root so you don't have to pass ids
