@@ -1,5 +1,15 @@
 import { signRequest, type SigningCredentials } from "./signing.js";
-import type { Board, Card, List, Member, Webhook } from "./types.js";
+import type {
+  Attachment,
+  Board,
+  Card,
+  CheckItem,
+  Checklist,
+  CommentAction,
+  List,
+  Member,
+  Webhook,
+} from "./types.js";
 
 export class TrelloApiError extends Error {
   constructor(
@@ -55,9 +65,13 @@ export class TrelloClient {
       headers: { Authorization: signed.authorization, Accept: "application/json" },
     });
 
+    return this.readBody<T>(res, target.toString());
+  }
+
+  private async readBody<T>(res: Response, url: string): Promise<T> {
     const text = await res.text();
     if (!res.ok) {
-      throw new TrelloApiError(res.status, res.statusText, text, target.toString());
+      throw new TrelloApiError(res.status, res.statusText, text, url);
     }
     if (text.length === 0) return undefined as T;
     try {
@@ -177,6 +191,160 @@ export class TrelloClient {
 
   deleteCard(cardId: string): Promise<void> {
     return this.request<void>("DELETE", `/cards/${encodeURIComponent(cardId)}`);
+  }
+
+  listAttachments(cardId: string): Promise<Attachment[]> {
+    return this.request<Attachment[]>(
+      "GET",
+      `/cards/${encodeURIComponent(cardId)}/attachments`,
+    );
+  }
+
+  attachUrl(
+    cardId: string,
+    input: { url: string; name?: string; setCover?: boolean },
+  ): Promise<Attachment> {
+    return this.request<Attachment>(
+      "POST",
+      `/cards/${encodeURIComponent(cardId)}/attachments`,
+      { url: input.url, name: input.name, setCover: input.setCover },
+    );
+  }
+
+  async attachFile(
+    cardId: string,
+    file: { data: Buffer; filename: string; mimeType?: string },
+    opts: { name?: string; setCover?: boolean } = {},
+  ): Promise<Attachment> {
+    const url = `${this.baseUrl}/cards/${encodeURIComponent(cardId)}/attachments`;
+    // Metadata is signed and travels in the query string; the file rides in the
+    // multipart body, which RFC 5849 §3.4.1.3 excludes from the signature base
+    // string (only urlencoded bodies participate). Content-Type is intentionally
+    // unset so FormData supplies the multipart boundary.
+    const filtered: Record<string, string | number | boolean> = {};
+    for (const [k, v] of Object.entries({
+      name: opts.name,
+      mimeType: file.mimeType,
+      setCover: opts.setCover,
+    })) {
+      if (v !== undefined) filtered[k] = v;
+    }
+    const signed = signRequest(this.creds, { method: "POST", url, params: filtered });
+    const target = new URL(url);
+    for (const [k, v] of Object.entries(filtered)) {
+      target.searchParams.set(k, String(v));
+    }
+    const form = new FormData();
+    // Re-wrap into a fresh ArrayBuffer-backed view: Node's Buffer is typed as
+    // ArrayBufferLike-backed, which is not assignable to the DOM BlobPart type.
+    const bytes = new Uint8Array(file.data);
+    const blob = file.mimeType
+      ? new Blob([bytes], { type: file.mimeType })
+      : new Blob([bytes]);
+    form.append("file", blob, file.filename);
+    const res = await this.fetchImpl(target.toString(), {
+      method: "POST",
+      headers: { Authorization: signed.authorization, Accept: "application/json" },
+      body: form,
+    });
+    return this.readBody<Attachment>(res, target.toString());
+  }
+
+  deleteAttachment(cardId: string, attachmentId: string): Promise<void> {
+    return this.request<void>(
+      "DELETE",
+      `/cards/${encodeURIComponent(cardId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    );
+  }
+
+  listChecklists(cardId: string): Promise<Checklist[]> {
+    return this.request<Checklist[]>(
+      "GET",
+      `/cards/${encodeURIComponent(cardId)}/checklists`,
+    );
+  }
+
+  createChecklist(
+    cardId: string,
+    input: { name: string; pos?: string | number },
+  ): Promise<Checklist> {
+    return this.request<Checklist>("POST", "/checklists", {
+      idCard: cardId,
+      name: input.name,
+      pos: input.pos,
+    });
+  }
+
+  deleteChecklist(checklistId: string): Promise<void> {
+    return this.request<void>(
+      "DELETE",
+      `/checklists/${encodeURIComponent(checklistId)}`,
+    );
+  }
+
+  addCheckItem(
+    checklistId: string,
+    input: { name: string; checked?: boolean; pos?: string | number },
+  ): Promise<CheckItem> {
+    return this.request<CheckItem>(
+      "POST",
+      `/checklists/${encodeURIComponent(checklistId)}/checkItems`,
+      { name: input.name, checked: input.checked, pos: input.pos },
+    );
+  }
+
+  updateCheckItem(
+    cardId: string,
+    checkItemId: string,
+    patch: { name?: string; state?: "complete" | "incomplete"; pos?: string | number },
+  ): Promise<CheckItem> {
+    return this.request<CheckItem>(
+      "PUT",
+      `/cards/${encodeURIComponent(cardId)}/checkItem/${encodeURIComponent(checkItemId)}`,
+      { name: patch.name, state: patch.state, pos: patch.pos },
+    );
+  }
+
+  deleteCheckItem(checklistId: string, checkItemId: string): Promise<void> {
+    return this.request<void>(
+      "DELETE",
+      `/checklists/${encodeURIComponent(checklistId)}/checkItems/${encodeURIComponent(checkItemId)}`,
+    );
+  }
+
+  listComments(cardId: string): Promise<CommentAction[]> {
+    return this.request<CommentAction[]>(
+      "GET",
+      `/cards/${encodeURIComponent(cardId)}/actions`,
+      { filter: "commentCard" },
+    );
+  }
+
+  addComment(cardId: string, text: string): Promise<CommentAction> {
+    return this.request<CommentAction>(
+      "POST",
+      `/cards/${encodeURIComponent(cardId)}/actions/comments`,
+      { text },
+    );
+  }
+
+  updateComment(
+    cardId: string,
+    commentId: string,
+    text: string,
+  ): Promise<CommentAction> {
+    return this.request<CommentAction>(
+      "PUT",
+      `/cards/${encodeURIComponent(cardId)}/actions/${encodeURIComponent(commentId)}/comments`,
+      { text },
+    );
+  }
+
+  deleteComment(cardId: string, commentId: string): Promise<void> {
+    return this.request<void>(
+      "DELETE",
+      `/cards/${encodeURIComponent(cardId)}/actions/${encodeURIComponent(commentId)}/comments`,
+    );
   }
 
   listWebhooks(tokenForOwner: string): Promise<Webhook[]> {

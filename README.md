@@ -124,6 +124,20 @@ it if it's personal.
 | cards    | `create_card` | Create a card on a list. |
 | cards    | `update_card` | Edit name, desc, due, list, members, labels. |
 | cards    | `delete_card` | Delete a card permanently. |
+| attachments | `list_attachments` | List a card's attachments. |
+| attachments | `attach_url` | Attach a URL (link) to a card. |
+| attachments | `attach_file` | Upload a file to a card via `filePath` or `base64`. |
+| attachments | `delete_attachment` | Remove an attachment from a card. |
+| checklists | `list_checklists` | A card's checklists with their items. |
+| checklists | `create_checklist` | Add a checklist to a card. |
+| checklists | `delete_checklist` | Remove a checklist from a card. |
+| checklists | `add_checkitem` | Add an item to a checklist. |
+| checklists | `update_checkitem` | Rename, (un)check, or reposition an item. |
+| checklists | `delete_checkitem` | Remove an item from a checklist. |
+| comments | `list_comments` | A card's comments. |
+| comments | `add_comment` | Comment on a card. |
+| comments | `update_comment` | Edit a comment's text. |
+| comments | `delete_comment` | Delete a comment. |
 | status   | `cache_board_lists` | Refresh the per-board status→list mapping cache. |
 | status   | `move_card_by_status` | Move a card by task status (e.g. `done`, `qa`, `production_critical`). |
 | webhooks | `list_webhooks` | List webhooks owned by your token. |

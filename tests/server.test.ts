@@ -105,24 +105,38 @@ describe("Trello MCP server (end-to-end)", () => {
       const names = tools.map((t) => t.name).sort();
       expect(names).toEqual(
         [
+          "add_checkitem",
+          "add_comment",
+          "attach_file",
+          "attach_url",
           "auth_login",
           "auth_logout",
           "auth_status",
           "cache_board_lists",
           "create_card",
+          "create_checklist",
           "create_list",
           "create_webhook",
+          "delete_attachment",
           "delete_card",
+          "delete_checkitem",
+          "delete_checklist",
+          "delete_comment",
           "delete_webhook",
           "get_board",
           "get_card",
+          "list_attachments",
           "list_boards",
           "list_cards",
+          "list_checklists",
+          "list_comments",
           "list_lists",
           "list_webhooks",
           "move_card_by_status",
           "project_config",
           "update_card",
+          "update_checkitem",
+          "update_comment",
           "update_list",
         ].sort(),
       );
@@ -579,6 +593,146 @@ describe("Trello MCP server (end-to-end)", () => {
         await expect(readFile(cacheFile, "utf8")).rejects.toMatchObject({
           code: "ENOENT",
         });
+      } finally {
+        await close();
+      }
+    });
+  });
+
+  describe("attachments / checklists / comments", () => {
+    async function seeded(responses: Array<{ status?: number; body: string }>) {
+      const store = new TokenStore(tokenPath);
+      await store.save({
+        token: "tk",
+        tokenSecret: "ts",
+        consumerKey: "ck",
+        obtainedAt: new Date().toISOString(),
+        scope: "read,write",
+        expiration: "never",
+      });
+      const { fetch, calls } = mockFetch(responses);
+      const handle = await bootClient({ config: makeConfig(), fetchImpl: fetch });
+      return { ...handle, calls };
+    }
+
+    it("attach_url POSTs to /cards/<id>/attachments with the url", async () => {
+      const att = { id: "att1", url: "https://x/y", name: "link" };
+      const { client, close, calls } = await seeded([{ body: JSON.stringify(att) }]);
+      try {
+        const res = await client.callTool({
+          name: "attach_url",
+          arguments: { cardId: "C1", url: "https://x/y", name: "link" },
+        });
+        expect(JSON.parse(textOf(res as never))).toEqual(att);
+        const url = new URL(calls[0]!.url);
+        expect(calls[0]!.method).toBe("POST");
+        expect(url.pathname).toBe("/1/cards/C1/attachments");
+        expect(url.searchParams.get("url")).toBe("https://x/y");
+        expect(url.searchParams.get("name")).toBe("link");
+      } finally {
+        await close();
+      }
+    });
+
+    it("attach_file reads a real temp file and uploads it as multipart (file not in query)", async () => {
+      const att = { id: "att2", name: "note.txt", isUpload: true };
+      const filePath = join(dir, "note.txt");
+      await fsWriteFile(filePath, "hello attach");
+      const { client, close, calls } = await seeded([{ body: JSON.stringify(att) }]);
+      try {
+        const res = await client.callTool({
+          name: "attach_file",
+          arguments: { cardId: "C1", filePath, mimeType: "text/plain" },
+        });
+        expect(JSON.parse(textOf(res as never))).toEqual(att);
+        const url = new URL(calls[0]!.url);
+        expect(calls[0]!.method).toBe("POST");
+        expect(url.pathname).toBe("/1/cards/C1/attachments");
+        expect(url.searchParams.get("mimeType")).toBe("text/plain");
+        expect(url.searchParams.has("file")).toBe(false);
+        expect(calls[0]!.authorization).toMatch(/^OAuth /);
+      } finally {
+        await close();
+      }
+    });
+
+    it("attach_file errors when neither filePath nor base64 is provided", async () => {
+      const { client, close } = await seeded([]);
+      try {
+        const res = (await client.callTool({
+          name: "attach_file",
+          arguments: { cardId: "C1" },
+        })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+        expect(res.isError).toBe(true);
+        expect(textOf(res as never)).toMatch(/exactly one of/);
+      } finally {
+        await close();
+      }
+    });
+
+    it("attach_file errors when the file does not exist", async () => {
+      const { client, close } = await seeded([]);
+      try {
+        const res = (await client.callTool({
+          name: "attach_file",
+          arguments: { cardId: "C1", filePath: join(dir, "nope.bin") },
+        })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+        expect(res.isError).toBe(true);
+        expect(textOf(res as never)).toMatch(/File not found/);
+      } finally {
+        await close();
+      }
+    });
+
+    it("add_checkitem POSTs to /checklists/<id>/checkItems", async () => {
+      const item = { id: "ci1", name: "step", state: "incomplete" };
+      const { client, close, calls } = await seeded([{ body: JSON.stringify(item) }]);
+      try {
+        const res = await client.callTool({
+          name: "add_checkitem",
+          arguments: { checklistId: "CL1", name: "step" },
+        });
+        expect(JSON.parse(textOf(res as never))).toEqual(item);
+        const url = new URL(calls[0]!.url);
+        expect(calls[0]!.method).toBe("POST");
+        expect(url.pathname).toBe("/1/checklists/CL1/checkItems");
+        expect(url.searchParams.get("name")).toBe("step");
+      } finally {
+        await close();
+      }
+    });
+
+    it("update_checkitem maps checked=true to state=complete on the card path", async () => {
+      const item = { id: "ci1", state: "complete" };
+      const { client, close, calls } = await seeded([{ body: JSON.stringify(item) }]);
+      try {
+        const res = await client.callTool({
+          name: "update_checkitem",
+          arguments: { cardId: "C1", checkItemId: "ci1", checked: true },
+        });
+        expect(JSON.parse(textOf(res as never))).toEqual(item);
+        const url = new URL(calls[0]!.url);
+        expect(calls[0]!.method).toBe("PUT");
+        expect(url.pathname).toBe("/1/cards/C1/checkItem/ci1");
+        expect(url.searchParams.get("state")).toBe("complete");
+      } finally {
+        await close();
+      }
+    });
+
+    it("add_comment POSTs the text to /cards/<id>/actions/comments", async () => {
+      const action = { id: "a1", type: "commentCard", data: { text: "hi" } };
+      const { client, close, calls } = await seeded([{ body: JSON.stringify(action) }]);
+      try {
+        const res = await client.callTool({
+          name: "add_comment",
+          arguments: { cardId: "C1", text: "hi" },
+        });
+        expect(JSON.parse(textOf(res as never))).toEqual(action);
+        const url = new URL(calls[0]!.url);
+        expect(calls[0]!.method).toBe("POST");
+        expect(url.pathname).toBe("/1/cards/C1/actions/comments");
+        expect(url.searchParams.get("text")).toBe("hi");
       } finally {
         await close();
       }
